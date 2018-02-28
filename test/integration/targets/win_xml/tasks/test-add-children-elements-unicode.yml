@@ -1,0 +1,38 @@
+---
+- name: get expanded %TEMP% value
+  win_command: powershell.exe "$env:TEMP"
+  register: raw_temp_value
+# match filter doesn't work with \, replace it with /
+- name: replace backslash with frontslash for easier testing
+  set_fact:
+    temp_value: "{{raw_temp_value.stdout_lines[0] | regex_replace('\\\\', '/')}}"
+- debug:
+    vars: temp_value
+
+- name: Setup test fixture
+  win_copy:
+    src: fixtures/ansible-xml-beers.xml
+    dest: "{{ temp_value }}/ansible-xml-beers.xml"
+
+- name: Add child element
+  xml:
+    path: "{{ temp_value }}/ansible-xml-beers.xml"
+    xpath: /business/beers
+    add_children:
+    - beer: Окское
+  register: add_children_elements_unicode
+
+- name: Compare to expected result
+  win_copy:
+    src: results/test-add-children-elements-unicode.xml
+    dest: c:/temp/ansible-xml-beers.xml
+  check_mode: yes
+  diff: yes
+  register: comparison
+
+- name: Test expected result
+  assert:
+    that:
+    - add_children_elements_unicode.changed == true
+    - comparison.changed == false  # identical
+  #command: diff -u {{ role_path }}/results/test-add-children-elements-unicode.xml /tmp/ansible-xml-beers.xml
